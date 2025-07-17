@@ -1,0 +1,15 @@
+{
+  "name": "ecoiq-root",
+  "version": "1.0.0",
+  "description": "Root package for EcoIQ project",
+  "private": true,
+  "scripts": {
+    "simulate": "ts-node ./scripts/simulate-data.ts"
+  },
+  "devDependencies": {
+    "axios": "^1.7.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  },
+  "dependencies": {}
+} 

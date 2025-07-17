@@ -1,0 +1,65 @@
+name: Deploy EcoIQ Application
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build_and_deploy_frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: ./EcoIQ_Dashboard
+        run: npm install
+
+      - name: Build frontend
+        working-directory: ./EcoIQ_Dashboard
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1 # Change to your AWS region
+
+      - name: Deploy frontend to S3
+        run: aws s3 sync ./EcoIQ_Dashboard/dist s3://$(aws cloudformation describe-stacks --stack-name EcoIqBackendStack --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text) --delete
+
+  deploy_backend:
+    runs-on: ubuntu-latest
+    needs: build_and_deploy_frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        working-directory: ./EcoIQ_Backend
+        run: npm install
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1 # Change to your AWS region
+
+      - name: Deploy CDK stack
+        working-directory: ./EcoIQ_Backend
+        run: |
+          npm install -g aws-cdk
+          cdk deploy --require-approval never 

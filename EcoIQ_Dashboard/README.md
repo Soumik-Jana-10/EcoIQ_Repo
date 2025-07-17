@@ -1,69 +1,91 @@
-# React + TypeScript + Vite
+# EcoIQ Dashboard – Phase 1 (Frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A responsive React + Vite + Tailwind CSS application that visualises indoor environmental data **(temperature, humidity, occupancy, AQI)** for each room and shows the current HVAC **mode**.  This is the first milestone of the EcoIQ project and ships with mocked data plus AWS Amplify scaffolding for authentication.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 Quick start
 
-## Expanding the ESLint configuration
+```bash
+# 1. Install dependencies (only needed once)
+cd EcoIQ_Dashboard
+npm install
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# 2. Create a local .env file with your AWS Cognito details
+cp .env.example .env
+# then edit .env with real values (see below)
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 3. Run the dev server (auto-reloads on save)
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The app is available at `http://localhost:5173` (or the port Vite prints). It’s fully mobile-responsive—open browser DevTools and toggle the device toolbar to confirm.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 🖼️ UI preview
+![Dashboard screenshot](docs/dashboard-mobile.png)
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+> The layout adapts fluidly: single-column on phones, two columns on small tablets, up to a 4-column grid on desktop.
+
+## 📦 Tech stack
+
+| Layer      | Library               | Why                                   |
+|------------|-----------------------|---------------------------------------|
+| UI         | React 18              | Modern component model                |
+| Styling    | Tailwind CSS          | Utility-first, rapid responsive UI    |
+| Charts     | Recharts              | Simple yet powerful line charts       |
+| Auth (stub)| AWS Amplify JS        | Easy Cognito integration (Phase 2)    |
+
+---
+
+## 🔐 Environment variables
+Create a `.env` (or `.env.local`) file in `EcoIQ_Dashboard/` containing:
+
+```bash
+VITE_AWS_REGION=us-east-1                # e.g. us-east-1
+VITE_COGNITO_USER_POOL_ID=us-east-1_XXXX # your User Pool ID
+VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxx # web client ID
 ```
+These are read in `src/aws-exports.ts` and passed to `aws-amplify` at runtime.
+
+> **Note**: Phase 1 ships with **mock data** only.  Cognito login screens will appear once a real User Pool exists and Amplify’s Auth UI is enabled.
+
+---
+
+## 📁 Project structure (relevant bits)
+```
+EcoIQ_Dashboard/
+├── src/
+│   ├── components/
+│   │   ├── HistoryChart.tsx   # Recharts wrapper
+│   │   ├── ModeIndicator.tsx  # Colour badge (Eco, Comfort, Cool)
+│   │   └── RoomCard.tsx       # Responsive room card
+│   ├── App.tsx                # Renders grid of RoomCards
+│   ├── main.tsx               # React entry + Amplify config
+│   └── index.css              # Tailwind directives
+├── tailwind.config.js         # Tailwind paths & theme
+├── postcss.config.js          # PostCSS plugins
+└── README.md                  # You are here
+```
+
+---
+
+## 🛠️ Available scripts
+
+```bash
+npm run dev       # start Vite dev server with HMR
+npm run build     # production build (dist/)
+npm run preview   # preview a production build locally
+npm run lint      # eslint (coming soon)
+```
+
+---
+
+## 🧭 Next steps
+1. **Backend CDK stack** – DynamoDB, Lambdas, API Gateway, Cognito (Phase 2 tasks `T04-T09`).
+2. Replace the mock `mockRooms` array with real API calls (Authenticated GET `/rooms`).
+3. Add sign-in / sign-up screens via `@aws-amplify/ui-react` once Cognito is provisioned.
+4. Add historical line charts and live updates via polling or websockets.
+
+---
+
+Made with ❤️ for better indoor environments.
