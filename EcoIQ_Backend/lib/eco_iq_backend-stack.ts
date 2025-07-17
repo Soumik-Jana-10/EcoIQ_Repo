@@ -9,6 +9,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export class EcoIqBackendStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -25,10 +26,11 @@ export class EcoIqBackendStack extends cdk.Stack {
     });
 
     // LAM-4: Create Lambda function for alert engine
-    const alertEngineLambda = new lambda.Function(this, 'AlertEngineLambda', {
+    const alertEngineLambda = new NodejsFunction(this, 'AlertEngineLambda', {
         runtime: lambda.Runtime.NODEJS_20_X,
-        handler: 'alert-engine.handler',
-        code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
+        handler: 'handler',
+        entry: path.join(__dirname, '../lambda/alert-engine.ts'),
+        bundling: { forceDockerBundling: false },
         environment: {
             SENDER_EMAIL: 'your-verified-email@example.com', // Replace with your verified SES email
         },
@@ -47,10 +49,11 @@ export class EcoIqBackendStack extends cdk.Stack {
     }));
 
     // LAM-1: Create Lambda function for decision engine
-    const decisionEngineLambda = new lambda.Function(this, 'DecisionEngineLambda', {
+    const decisionEngineLambda = new NodejsFunction(this, 'DecisionEngineLambda', {
       runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'decision-engine.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/decision-engine.ts'),
+      bundling: { forceDockerBundling: false },
       environment: {
         TABLE_NAME: roomDataTable.tableName,
       },
@@ -60,20 +63,22 @@ export class EcoIqBackendStack extends cdk.Stack {
     roomDataTable.grantWriteData(decisionEngineLambda);
 
     // LAM-2: Create Lambda function for fetching latest room data
-    const getLatestRoomDataLambda = new lambda.Function(this, 'GetLatestRoomDataLambda', {
+    const getLatestRoomDataLambda = new NodejsFunction(this, 'GetLatestRoomDataLambda', {
       runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'get-latest-room-data.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/get-latest-room-data.ts'),
+      bundling: { forceDockerBundling: false },
       environment: {
         TABLE_NAME: roomDataTable.tableName,
       },
     });
 
     // LAM-3: Create Lambda function for fetching room history
-    const getRoomHistoryLambda = new lambda.Function(this, 'GetRoomHistoryLambda', {
+    const getRoomHistoryLambda = new NodejsFunction(this, 'GetRoomHistoryLambda', {
         runtime: lambda.Runtime.NODEJS_20_X,
-        handler: 'get-room-history.handler',
-        code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
+        handler: 'handler',
+        entry: path.join(__dirname, '../lambda/get-room-history.ts'),
+        bundling: { forceDockerBundling: false },
         environment: {
             TABLE_NAME: roomDataTable.tableName,
         },
@@ -105,10 +110,13 @@ export class EcoIqBackendStack extends cdk.Stack {
         accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         lambdaTriggers: {
-          preSignUp: new lambda.Function(this, 'AutoConfirmUserLambda', {
+          preSignUp: new NodejsFunction(this, 'AutoConfirmUserLambda', {
             runtime: lambda.Runtime.NODEJS_20_X,
-            handler: 'auto-confirm-user.handler',
-            code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
+            handler: 'handler',
+            entry: path.join(__dirname, '../lambda/auto-confirm-user.ts'),
+            bundling: {
+              forceDockerBundling: false,
+            },
           }),
         }
     });
@@ -122,21 +130,29 @@ export class EcoIqBackendStack extends cdk.Stack {
     const api = new apigateway.RestApi(this, 'EcoIqApi', {
       restApiName: 'EcoIQ Service',
       description: 'This service handles indoor environment data.',
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization'],
-      },
+      // NOTE: Removing global CORS to apply it at the resource level for maximum specificity
     });
 
     const ingestIntegration = new apigateway.LambdaIntegration(decisionEngineLambda);
-    const ingestResource = api.root.addResource('ingest');
+    const ingestResource = api.root.addResource('ingest', {
+        defaultCorsPreflightOptions: {
+            allowOrigins: apigateway.Cors.ALL_ORIGINS,
+            allowMethods: ['POST'],
+            allowHeaders: ['Content-Type'],
+        },
+    });
     ingestResource.addMethod('POST', ingestIntegration, {
         authorizationType: apigateway.AuthorizationType.NONE,
     });
 
     // API-2: Create /rooms endpoint
-    const roomsResource = api.root.addResource('rooms');
+    const roomsResource = api.root.addResource('rooms', {
+        defaultCorsPreflightOptions: {
+            allowOrigins: apigateway.Cors.ALL_ORIGINS,
+            allowMethods: ['GET'],
+            allowHeaders: ['Content-Type', 'Authorization'],
+        },
+    });
     const getLatestRoomDataIntegration = new apigateway.LambdaIntegration(getLatestRoomDataLambda);
     roomsResource.addMethod('GET', getLatestRoomDataIntegration, {
         authorizationType: apigateway.AuthorizationType.COGNITO,
@@ -144,7 +160,13 @@ export class EcoIqBackendStack extends cdk.Stack {
     });
 
     // API-3: Create /rooms/{id} endpoint
-    const roomHistoryResource = roomsResource.addResource('{id}');
+    const roomHistoryResource = roomsResource.addResource('{id}', {
+        defaultCorsPreflightOptions: {
+            allowOrigins: apigateway.Cors.ALL_ORIGINS,
+            allowMethods: ['GET'],
+            allowHeaders: ['Content-Type', 'Authorization'],
+        },
+    });
     const getRoomHistoryIntegration = new apigateway.LambdaIntegration(getRoomHistoryLambda);
     roomHistoryResource.addMethod('GET', getRoomHistoryIntegration, {
         authorizationType: apigateway.AuthorizationType.COGNITO,
@@ -219,6 +241,12 @@ export class EcoIqBackendStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'WebsiteBucketName', {
         value: websiteBucket.bucketName,
         description: 'The name of the S3 bucket hosting the frontend',
+    });
+
+    // CDK-OUT-3: Output API URL
+    new cdk.CfnOutput(this, 'ApiUrl', {
+        value: api.url,
+        description: 'The URL of the API Gateway',
     });
   }
 }

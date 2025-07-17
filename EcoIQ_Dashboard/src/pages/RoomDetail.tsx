@@ -3,8 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import HistoryChart from '../components/HistoryChart';
 import type { RoomData } from '../components/RoomCard';
-
-const API_URL = 'https://zfpub451b6.execute-api.eu-north-1.amazonaws.com/prod/rooms';
+import { API_URL } from '../config';
 
 export default function RoomDetail({ user, signOut }: { user: any, signOut: (() => void) | undefined }) {
   const { id } = useParams<{ id: string }>();
@@ -22,7 +21,7 @@ export default function RoomDetail({ user, signOut }: { user: any, signOut: (() 
         }
         const token = idToken.toString();
 
-        const response = await fetch(`${API_URL}/${id}/history`, {
+        const response = await fetch(`${API_URL}/rooms/${id}/history`, {
           headers: {
             Authorization: token,
           },
@@ -40,8 +39,10 @@ export default function RoomDetail({ user, signOut }: { user: any, signOut: (() 
       }
     };
 
-    fetchRoomHistory();
-  }, [id]);
+    if (user) {
+        fetchRoomHistory();
+    }
+  }, [id, user]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 dark:bg-gray-900">
