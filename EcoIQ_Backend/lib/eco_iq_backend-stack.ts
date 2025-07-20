@@ -109,6 +109,9 @@ export class EcoIqBackendStack extends cdk.Stack {
         },
         accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
+        customAttributes: {
+            role: new cognito.StringAttribute({ mutable: true }),
+        },
         lambdaTriggers: {
           preSignUp: new NodejsFunction(this, 'AutoConfirmUserLambda', {
             runtime: lambda.Runtime.NODEJS_20_X,
@@ -118,8 +121,35 @@ export class EcoIqBackendStack extends cdk.Stack {
               forceDockerBundling: false,
             },
           }),
+          // We'll add the postConfirmation trigger in a separate deployment
         }
     });
+
+    // Create the Lambda but don't attach it to the User Pool yet
+    const addUserToGroupLambda = new NodejsFunction(this, 'AddUserToGroupLambda', {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'handler',
+        entry: path.join(__dirname, '../lambda/add-user-to-group.ts'),
+        bundling: {
+            forceDockerBundling: false,
+        },
+        environment: {
+            USER_POOL_ID: userPool.userPoolId,
+        },
+    });
+
+    // Grant the Lambda permission to add users to groups
+    if (addUserToGroupLambda.role) {
+      addUserToGroupLambda.role.addToPrincipalPolicy(new iam.PolicyStatement({
+          actions: ['cognito-idp:AdminAddUserToGroup', 'cognito-idp:AdminUpdateUserAttributes'],
+          resources: [userPool.userPoolArn],
+      }));
+    }
+
+    // NOTE: We're not adding the trigger here due to circular dependency issues.
+    // Instead, we'll use the AWS CLI to manually connect the Lambda to the User Pool.
+    // Run the following command:
+    // aws cognito-idp update-user-pool --user-pool-id <your-user-pool-id> --lambda-config "PostConfirmation=<your-lambda-arn>"
 
     // COGNITO-AUTH-1: Create API Gateway Authorizer
     const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'EcoIqAuthorizer', {

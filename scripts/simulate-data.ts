@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_ENDPOINT = 'https://r5hkaeuzpc.execute-api.us-east-1.amazonaws.com/prod/';
+const API_ENDPOINT = 'https://jzpl5g335a.execute-api.ap-south-1.amazonaws.com/prod/ingest';
 
 const ROOM_IDS = ['A1', 'B2', 'C3'];
 
