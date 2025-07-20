@@ -25,6 +25,31 @@ export class EcoIqBackendStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev purposes
     });
 
+    // DDB-5: Create DynamoDB table for alerts
+    const alertsTable = new dynamodb.Table(this, 'AlertsTable', {
+      tableName: 'alerts',
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev purposes
+    });
+
+    // Add GSI for querying alerts by room_id
+    alertsTable.addGlobalSecondaryIndex({
+      indexName: 'room_id-index',
+      partitionKey: { name: 'room_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL
+    });
+
+    // Add GSI for querying alerts by type
+    alertsTable.addGlobalSecondaryIndex({
+      indexName: 'type-index',
+      partitionKey: { name: 'type', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL
+    });
+
     // LAM-4: Create Lambda function for alert engine
     const alertEngineLambda = new NodejsFunction(this, 'AlertEngineLambda', {
         runtime: lambda.Runtime.NODEJS_20_X,
@@ -33,6 +58,7 @@ export class EcoIqBackendStack extends cdk.Stack {
         bundling: { forceDockerBundling: false },
         environment: {
             SENDER_EMAIL: 'your-verified-email@example.com', // Replace with your verified SES email
+            ALERTS_TABLE: alertsTable.tableName,
         },
     });
 
@@ -42,11 +68,42 @@ export class EcoIqBackendStack extends cdk.Stack {
         resources: ['*'], // In a real app, you might restrict this to a specific SES identity
     }));
 
+    // DDB-6: Grant Lambda write permissions to Alerts table
+    alertsTable.grantWriteData(alertEngineLambda);
+
     // DDB-4: Add DynamoDB stream as an event source for the alert Lambda
     alertEngineLambda.addEventSource(new DynamoEventSource(roomDataTable, {
         startingPosition: lambda.StartingPosition.LATEST,
         batchSize: 1,
     }));
+
+    // LAM-5: Create Lambda function for fetching alerts
+    const getAlertsLambda = new NodejsFunction(this, 'GetAlertsLambda', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/get-alerts.ts'),
+      bundling: { forceDockerBundling: false },
+      environment: {
+        ALERTS_TABLE: alertsTable.tableName,
+      },
+    });
+
+    // DDB-7: Grant Lambda read permissions to Alerts table
+    alertsTable.grantReadData(getAlertsLambda);
+
+    // LAM-6: Create Lambda function for acknowledging alerts
+    const acknowledgeAlertLambda = new NodejsFunction(this, 'AcknowledgeAlertLambda', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/acknowledge-alert.ts'),
+      bundling: { forceDockerBundling: false },
+      environment: {
+        ALERTS_TABLE: alertsTable.tableName,
+      },
+    });
+
+    // DDB-8: Grant Lambda write permissions to Alerts table
+    alertsTable.grantWriteData(acknowledgeAlertLambda);
 
     // LAM-1: Create Lambda function for decision engine
     const decisionEngineLambda = new NodejsFunction(this, 'DecisionEngineLambda', {
@@ -203,6 +260,35 @@ export class EcoIqBackendStack extends cdk.Stack {
         authorizer,
     });
 
+    // API-4: Create /alerts endpoint
+    const alertsResource = api.root.addResource('alerts', {
+        defaultCorsPreflightOptions: {
+            allowOrigins: apigateway.Cors.ALL_ORIGINS,
+            allowMethods: ['GET'],
+            allowHeaders: ['Content-Type', 'Authorization'],
+        },
+    });
+    const getAlertsIntegration = new apigateway.LambdaIntegration(getAlertsLambda);
+    alertsResource.addMethod('GET', getAlertsIntegration, {
+        authorizationType: apigateway.AuthorizationType.COGNITO,
+        authorizer,
+    });
+
+    // API-5: Create /alerts/{id}/acknowledge endpoint
+    const alertResource = alertsResource.addResource('{id}');
+    const acknowledgeResource = alertResource.addResource('acknowledge', {
+        defaultCorsPreflightOptions: {
+            allowOrigins: apigateway.Cors.ALL_ORIGINS,
+            allowMethods: ['POST'],
+            allowHeaders: ['Content-Type', 'Authorization'],
+        },
+    });
+    const acknowledgeAlertIntegration = new apigateway.LambdaIntegration(acknowledgeAlertLambda);
+    acknowledgeResource.addMethod('POST', acknowledgeAlertIntegration, {
+        authorizationType: apigateway.AuthorizationType.COGNITO,
+        authorizer,
+    });
+
     // COGNITO-2: Create User Pool Groups
     new cognito.CfnUserPoolGroup(this, 'AdminGroup', {
       userPoolId: userPool.userPoolId,
@@ -253,30 +339,27 @@ export class EcoIqBackendStack extends cdk.Stack {
         blockPublicAccess: new s3.BlockPublicAccess({
             blockPublicPolicy: false,
             restrictPublicBuckets: false,
-        }),
+            blockPublicAcls: false,
+            ignorePublicAcls: false
+        })
     });
 
-    // S3-2: Deploy frontend build to S3
-    new s3deploy.BucketDeployment(this, 'DeployEcoIqWebsite', {
-        sources: [s3deploy.Source.asset(path.join(__dirname, '../../EcoIQ_Dashboard/dist'))],
+    // S3-2: Deploy frontend to S3
+    new s3deploy.BucketDeployment(this, 'DeployWebsite', {
+        sources: [s3deploy.Source.asset('../EcoIQ_Dashboard/dist')],
         destinationBucket: websiteBucket,
     });
 
     // CDK-OUT-2: Output website URL
-    new cdk.CfnOutput(this, 'WebsiteUrl', {
+    new cdk.CfnOutput(this, 'WebsiteURL', {
         value: websiteBucket.bucketWebsiteUrl,
-        description: 'The URL of the deployed frontend website',
-    });
-
-    new cdk.CfnOutput(this, 'WebsiteBucketName', {
-        value: websiteBucket.bucketName,
-        description: 'The name of the S3 bucket hosting the frontend',
+        description: 'The URL of the website',
     });
 
     // CDK-OUT-3: Output API URL
-    new cdk.CfnOutput(this, 'ApiUrl', {
+    new cdk.CfnOutput(this, 'ApiURL', {
         value: api.url,
-        description: 'The URL of the API Gateway',
+        description: 'The URL of the API',
     });
   }
 }

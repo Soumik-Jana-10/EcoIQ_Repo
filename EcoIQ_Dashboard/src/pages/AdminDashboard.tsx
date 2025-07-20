@@ -15,7 +15,7 @@ interface RoomData {
   mode: 'Eco' | 'Comfort' | 'Cool';
 }
 
-export default function Dashboard({ user, signOut }: { user: any, signOut: (() => void) | undefined }) {
+export default function Dashboard({ signOut }: { user?: any, signOut: (() => void) | undefined }) {
   const [roomsData, setRoomsData] = useState<RoomData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,9 +166,9 @@ export default function Dashboard({ user, signOut }: { user: any, signOut: (() =
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-blue-900 text-white p-4 flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Indoor Environment Control</h1>
-        <nav className="flex space-x-6">
+      <header className="bg-blue-900 text-white p-4 flex flex-col md:flex-row md:justify-between md:items-center">
+        <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-0">EcoIQ HVAC Sytem</h1>
+        <nav className="flex flex-wrap gap-3 md:gap-6">
           <Link to="/" className="text-white hover:text-blue-200">Dashboard</Link>
           <Link to="/energy" className="text-white hover:text-blue-200">Energy Analytics</Link>
           <Link to="/alerts" className="text-white hover:text-blue-200">Alerts</Link>
@@ -185,8 +185,8 @@ export default function Dashboard({ user, signOut }: { user: any, signOut: (() =
       </header>
 
       {/* Last updated indicator */}
-      <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 flex justify-between items-center">
-        <div>
+      <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 flex flex-col md:flex-row md:justify-between md:items-center">
+        <div className="mb-2 md:mb-0">
           Last updated: {lastUpdated.toLocaleTimeString()}
         </div>
         <div className="flex items-center space-x-4">
@@ -246,7 +246,7 @@ export default function Dashboard({ user, signOut }: { user: any, signOut: (() =
               <div className="flex justify-center">
                 <div className="text-7xl font-bold">
                   {room.temperature}
-                  <span className="text-3xl">°F</span>
+                  <span className="text-3xl">°C</span>
                 </div>
               </div>
               
