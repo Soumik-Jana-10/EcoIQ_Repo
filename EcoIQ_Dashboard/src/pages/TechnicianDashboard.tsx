@@ -25,8 +25,8 @@ export default function TechnicianDashboard({ user, signOut }: { user?: any, sig
   const [roomsData, setRoomsData] = useState<RoomData[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
+  const [, setError] = useState<string | null>(null);
+  const [systemStatus, ] = useState<SystemStatus>({
     hvacHealth: 'good',
     lastMaintenance: '2024-02-20',
     nextMaintenance: '2024-03-20',
